@@ -283,6 +283,7 @@ def main():
 	parser.add_option('-v', '--vsizemax', help='Max VMem',dest='maxVSize')
 	parser.add_option('-a', '--extension', help='Use _ext special name',dest='extension')
         parser.add_option('-o', '--xrootd', help='Read input using xrootd',action="store_true",dest='xrootd')
+        parser.add_option('-i', '--ignore', help='Ignore any errors',action="store_true",dest='ignore')
 	(options,args) = parser.parse_args()
 	if not options.filename and not options.userWorkflow:
 		print "A filename or workflow is required"
@@ -309,6 +310,10 @@ def main():
            useX = 0
         else:
            useX = 1
+
+        ignore = 0
+        if options.ignore:
+           ignore = 1
 
         # Valid Tier-1 sites
         sites = ['T1_DE_KIT', 'T1_FR_CCIN2P3', 'T1_IT_CNAF', 'T1_ES_PIC', 'T1_TW_ASGC', 'T1_UK_RAL', 'T1_US_FNAL', 'T2_CH_CERN', 'HLT']
@@ -373,10 +378,10 @@ def main():
            else:
               siteSE = siteUse + '_Disk'
            [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, inputDataset, siteSE)
-           if not subscribedOurSite and not options.xrootd and 'Fall11R2' not in workflow:
+           if not subscribedOurSite and not options.xrootd and 'Fall11R2' not in workflow and not ignore:
               print 'ERROR: input dataset not subscribed/approved to required Disk endpoint'
               sys.exit(0)
-           if options.xrootd and not subscribedOtherSite:
+           if options.xrootd and not subscribedOtherSite and not ignore:
               print 'ERROR: input dataset not subscribed/approved to any Disk endpoint'
               sys.exit(0)
 
@@ -569,6 +574,10 @@ def main():
               lfn = '/store/himc'
 
            if campaign == 'UpgFall13d':
+              era = campaign
+              lfn = '/store/mc'
+
+           if campaign == '2019GEMUpg14DR':
               era = campaign
               lfn = '/store/mc'
 
