@@ -5,7 +5,6 @@ import optparse
 import httplib
 import datetime
 import shutil
-#import phedexSubscription
 
 url='cmsweb.cern.ch'
 
@@ -29,7 +28,7 @@ def getWorkflows(state):
 
    workflows = []
    for item in items:
-      if state in item['key'] and ('ReReco' in item['key'] or 'ReDigi' in item['key']):
+      if state in item['key'] and 'ReDigi' in item['key']:
          workflows.append(item['key'][0])
 
    return workflows
