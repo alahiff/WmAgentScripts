@@ -81,6 +81,8 @@ def getScenario(ps):
            pss = 'PU'
         if ps == 'SimGeneral.MixingModule.mix_CSA14_50ns_PoissonOOTPU_cfi':
            pss = 'PU_S14'
+        if ps == 'SimGeneral.MixingModule.mix_Flat_20_50_cfi':
+           pss = 'Flat20to50'
 
         return pss
 
@@ -369,19 +371,19 @@ def main():
               else:
                  siteCust = options.siteCust
            if options.site == 'HLT':
-              siteUse = ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN']
-              team = 'hlt'
+              siteUse = ['T2_CH_CERN_HLT', 'T2_CH_CERN_T0', 'T2_CH_CERN']
 
-           # Check if input dataset subscribed to disk endpoint
+           # Check if input dataset subscribed to disk endpoint, however ignore check for Fall11R2
+           # & Fall11R4
            if 'T2_CH_CERN' in siteUse:
               siteSE = 'T2_CH_CERN'
            else:
               siteSE = siteUse + '_Disk'
            [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, inputDataset, siteSE)
-           if not subscribedOurSite and not options.xrootd and 'Fall11R2' not in workflow and not ignore:
+           if not subscribedOurSite and not options.xrootd and ('Fall11R2' not in workflow and 'Fall11R4' not in workflow) and not ignore:
               print 'ERROR: input dataset not subscribed/approved to required Disk endpoint'
               sys.exit(0)
-           if options.xrootd and not subscribedOtherSite and not ignore:
+           if options.xrootd and not subscribedOtherSite and not ignore and not subscribedOurSite and ('Fall11R2' not in workflow and 'Fall11R4' not in workflow):
               print 'ERROR: input dataset not subscribed/approved to any Disk endpoint'
               sys.exit(0)
 
@@ -488,8 +490,14 @@ def main():
               era = 'HiWinter13'
               lfn = '/store/himc'
      
-           if 'Spring14dr' in workflow:
+           if 'Spring14dr' in workflow or 'Spring14premixdr' in workflow:
               era = 'Spring14dr'
+              lfn = '/store/mc'
+              if '_castor_' in workflow:
+                 specialName = 'castor_'
+
+           if 'ppSpring2014DRX53' in workflow:
+              era = 'ppSpring2014DRX53'
               lfn = '/store/mc'
               if '_castor_' in workflow:
                  specialName = 'castor_'
@@ -501,6 +509,8 @@ def main():
               pileupScenario = ''  
            if 'pAWinter13' in workflow and 'DR53X' in workflow:
               pileupScenario = 'pa' # not actually the pileup scenario of course
+           if 'pAWinter13' in workflow and 'DR53X' in workflow and 'pAMixingHijing' in workflow:
+              pileupScenario = 'pa_pAMixingHijing' # not actually the pileup scenario of course
            if 'ppWinter13' in workflow and 'DR53X' in workflow:
               pileupScenario = 'pp' # not actually the pileup scenario of course
 
@@ -578,6 +588,10 @@ def main():
               lfn = '/store/mc'
 
            if campaign == '2019GEMUpg14DR':
+              era = 'GEM2019Upg14DR'
+              lfn = '/store/mc'
+
+           if campaign == 'Summer12ExtendedGeo14DR':
               era = campaign
               lfn = '/store/mc'
 
@@ -650,7 +664,7 @@ def main():
               print 'ERROR: lfn is not defined'
               sys.exit(0)
 
-           if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN']:
+           if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_HLT', 'T2_CH_CERN_T0', 'T2_CH_CERN']:
               print 'ERROR: invalid site'
               sys.exit(0)
 
