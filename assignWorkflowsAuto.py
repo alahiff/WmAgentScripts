@@ -3,6 +3,7 @@ import urllib2,urllib, httplib, sys, re, os, json
 import optparse
 import reqMgrClient
 from dbs.apis.dbsClient import DbsApi
+from changePriorityWorkflow import changePriorityWorkflow
 
 dbs3_url = r'https://cmsweb.cern.ch/dbs/prod/global/DBSReader'
 
@@ -59,6 +60,10 @@ def getDatasetVersion(url, workflow, era, partialProcVersion):
 def getScenario(ps):
         pss = 'Unknown'
 
+        if ps == 'SimGeneral.MixingModule.mix_flat_0_10_cfi':
+           pss = 'Flat0to10'
+        if ps == 'SimGeneral.MixingModule.mix_Flat_20_50_cfi':
+           pss = 'Flat20to50'
         if ps == 'SimGeneral.MixingModule.mix_E8TeV_AVE_16_BX_25ns_cfi':
            pss = 'PU140Bx25'
         if ps == 'SimGeneral.MixingModule.mix_2012_Summer_50ns_PoissonOOTPU_cfi':
@@ -81,10 +86,14 @@ def getScenario(ps):
            pss = 'PU'
         if ps == 'SimGeneral.MixingModule.mix_CSA14_50ns_PoissonOOTPU_cfi':
            pss = 'PU_S14'
-        if ps == 'SimGeneral.MixingModule.mix_Flat_20_50_cfi':
-           pss = 'Flat20to50'
 
         return pss
+        
+def getProcDSMiddlePiece(dataset):
+        dsPieces=dataset.split('/')
+        procdsPieces=dsPieces[2].split('-')
+        sep="-"
+        return sep.join(procdsPieces[1:len(procdsPieces)-1])
 
 def getPileupDataset(url, workflow):
         conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
@@ -168,6 +177,8 @@ def getPileupScenario(url, workflow):
            scenario = 'PU' + meanPileUp + 'bx25'
         if scenario == 'PU140bx25' and 'Upgrade' in workflow:
            scenario = 'PU140Bx25'
+        if scenario == 'PU140bx25' and 'Upg14' in workflow:
+           scenario = 'age1k_PU140bx25'
         if scenario == 'PU':
            scenario = 'PU' + meanPileUp + 'bx' + bunchSpacing
            if meanPileUp == 'None' or bunchSpacing == 'None':
@@ -217,6 +228,9 @@ def assignRequest(url ,workflow ,team ,site ,era, procversion, procstring, activ
        softTimeout = 159600
     else:
        softTimeout = 144000
+       
+
+       
 
     params = {"action": "Assign",
               "Team"+team: "checked",
@@ -238,6 +252,15 @@ def assignRequest(url ,workflow ,team ,site ,era, procversion, procstring, activ
               "ProcessingVersion": procversion,
               "ProcessingString": procstring,
               "checkbox"+workflow: "checked"}
+              
+              
+              
+    # we don't want to subscribe these to tape and we certainly don't want move subscriptions ripping things out of T2's.
+              
+    if params["CustodialSites"] == 'None' or params["CustodialSites"] == '': 
+       del params["CustodialSites"]
+       siteCust='None'        
+              
 
     if useX == 1:
        print "- Using xrootd for input dataset"
@@ -275,6 +298,8 @@ def main():
 	parser.add_option('-w', '--workflow', help='Workflow',dest='userWorkflow')
 	parser.add_option('-t', '--team', help='Type of Requests',dest='team')
 	parser.add_option('-s', '--site', help='Force workflow to run at this site. For HLT/AI just put use HLT.',dest='site')
+	parser.add_option('-k', '--ignore-restrictions', help='Ignore site restrictions',action="store_true",dest='ignoresite')
+	parser.add_option('-u', '--new-priority', help='Change workflow priority to #',dest='newpriority')
 	parser.add_option('-c', '--custodial', help='Custodial site',dest='siteCust')
 	parser.add_option('-p', '--procstring', help='Process String',dest='inprocstring')
 	parser.add_option('-m', '--procversion', help='Process Version',dest='inprocversion')
@@ -312,10 +337,19 @@ def main():
            useX = 0
         else:
            useX = 1
-
+           
         ignore = 0
         if options.ignore:
            ignore = 1
+
+        ignoresiterestrictions = 0
+        if options.ignoresite:
+           ignoresiterestrictions = 1
+           
+        if not options.newpriority:
+           newpriority=0
+        else: 
+           newpriority=options.newpriority
 
         # Valid Tier-1 sites
         sites = ['T1_DE_KIT', 'T1_FR_CCIN2P3', 'T1_IT_CNAF', 'T1_ES_PIC', 'T1_TW_ASGC', 'T1_UK_RAL', 'T1_US_FNAL', 'T2_CH_CERN', 'HLT']
@@ -371,19 +405,19 @@ def main():
               else:
                  siteCust = options.siteCust
            if options.site == 'HLT':
-              siteUse = ['T2_CH_CERN_HLT', 'T2_CH_CERN_T0', 'T2_CH_CERN']
+              siteUse = ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN']
+              team = 'hlt'
 
-           # Check if input dataset subscribed to disk endpoint, however ignore check for Fall11R2
-           # & Fall11R4
+           # Check if input dataset subscribed to disk endpoint
            if 'T2_CH_CERN' in siteUse:
               siteSE = 'T2_CH_CERN'
            else:
               siteSE = siteUse + '_Disk'
            [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, inputDataset, siteSE)
-           if not subscribedOurSite and not options.xrootd and ('Fall11R2' not in workflow and 'Fall11R4' not in workflow) and not ignore:
+           if not subscribedOurSite and not options.xrootd and 'Fall11R2' not in workflow and not ignore:
               print 'ERROR: input dataset not subscribed/approved to required Disk endpoint'
               sys.exit(0)
-           if options.xrootd and not subscribedOtherSite and not ignore and not subscribedOurSite and ('Fall11R2' not in workflow and 'Fall11R4' not in workflow):
+           if options.xrootd and not subscribedOtherSite and not ignore:
               print 'ERROR: input dataset not subscribed/approved to any Disk endpoint'
               sys.exit(0)
 
@@ -490,7 +524,7 @@ def main():
               era = 'HiWinter13'
               lfn = '/store/himc'
      
-           if 'Spring14dr' in workflow or 'Spring14premixdr' in workflow:
+           if 'Spring14dr' in workflow:
               era = 'Spring14dr'
               lfn = '/store/mc'
               if '_castor_' in workflow:
@@ -501,6 +535,14 @@ def main():
               lfn = '/store/mc'
               if '_castor_' in workflow:
                  specialName = 'castor_'
+                 
+           if 'Spring14miniaod' in workflow:
+              era = 'Spring14miniaod'
+              specialName=getProcDSMiddlePiece(inputDataset)
+              lfn = '/store/mc'
+              pileupScenario = ''
+              globalTag = '' 
+              siteCust= 'None'                
 
            if 'Winter13' in workflow and 'DR53X' in workflow:
               era = 'HiWinter13'
@@ -586,10 +628,30 @@ def main():
            if campaign == 'UpgFall13d':
               era = campaign
               lfn = '/store/mc'
-
+              
            if campaign == '2019GEMUpg14DR':
               era = 'GEM2019Upg14DR'
               lfn = '/store/mc'
+              if '_age1k_' in workflow:
+                 specialName = 'age1k_'
+
+           if campaign == '2023MuonUpg14DR':
+              era = 'Muon2023Upg14DR'
+              lfn = '/store/mc'
+              if '_age1k_' in workflow:
+                 specialName = 'age1k_'
+
+           if campaign == '2023TTIUpg14DR':
+              era = 'TTI2023Upg14DR'
+              lfn = '/store/mc'
+              if '_age1k_' in workflow:
+                 specialName = 'age1k_'
+
+           if campaign == '2023TTIUpg14D':
+              era = 'TTI2023Upg14D'
+              lfn = '/store/mc'
+              if '_age1k_' in workflow:
+                 specialName = 'age1k_'
 
            if campaign == 'Summer12ExtendedGeo14DR':
               era = campaign
@@ -664,7 +726,7 @@ def main():
               print 'ERROR: lfn is not defined'
               sys.exit(0)
 
-           if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_HLT', 'T2_CH_CERN_T0', 'T2_CH_CERN']:
+           if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN'] and not ignoresiterestrictions:
               print 'ERROR: invalid site'
               sys.exit(0)
 
@@ -674,12 +736,17 @@ def main():
 
            if options.execute:
               if restrict == 'None' or restrict == siteUse:
-	         assignRequest(url, workflow, team, siteUse, era, procversion, procstring, activity, lfn, maxmergeevents, maxRSS, maxVSize, useX, siteCust)
+	          assignRequest(url, workflow, team, siteUse, era, procversion, procstring, activity, lfn, maxmergeevents, maxRSS, maxVSize, useX, siteCust)
+                  if (newpriority !=0 ):
+                     changePriorityWorkflow(url,workflow,newpriority)
+                     print "Priority reset to %i" % newpriority
               else:
-                 print 'Skipping workflow ',workflow
+                     print 'Skipping workflow ',workflow
            else:
               if restrict == 'None' or restrict == siteUse:
                  print 'Would assign ',workflow,' with ','Acquisition Era:',era,'ProcessingString:',procstring,'ProcessingVersion:',procversion,'lfn:',lfn,'Site(s):',siteUse,'Custodial Site:',siteCust,'team:',team,'maxmergeevents:',maxmergeevents,'maxRSS:',maxRSS
+                 if (newpriority !=0 ):
+                    print "Would reset priority to %i" % newpriority
               else:
                  print 'Would skip workflow ',workflow
 
