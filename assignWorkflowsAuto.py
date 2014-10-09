@@ -39,8 +39,10 @@ def getDatasets(dataset):
         reply = dbsapi.listDatasets(dataset=dataset,dataset_access_type='*')
         return reply
 
-def getDatasetVersion(url, workflow, era, partialProcVersion):
+def getDatasetVersion(url, workflow):
         versionNum = 1
+        era = getEra(url, workflow)
+        partialProcVersion = getProcString(url, workflow)
         outputs = reqMgrClient.outputdatasetsWorkflow(url, workflow)
         for output in outputs:
            bits = output.split('/')
@@ -56,44 +58,6 @@ def getDatasetVersion(url, workflow, era, partialProcVersion):
                     versionNum=versionNum+1
 
         return versionNum
-
-def getScenario(ps):
-        pss = 'Unknown'
-
-        if ps == 'SimGeneral.MixingModule.mix_flat_0_10_cfi':
-           pss = 'Flat0to10'
-        if ps == 'SimGeneral.MixingModule.mix_Flat_20_50_cfi':
-           pss = 'Flat20to50'
-        if ps == 'SimGeneral.MixingModule.mix_E8TeV_AVE_16_BX_25ns_cfi':
-           pss = 'PU140Bx25'
-        if ps == 'SimGeneral.MixingModule.mix_2012_Summer_50ns_PoissonOOTPU_cfi':
-           pss = 'PU_S10'
-        if ps == 'SimGeneral.MixingModule.mix_E7TeV_Fall2011_Reprocess_50ns_PoissonOOTPU_cfi':
-           pss = 'PU_S6'
-        if ps == 'SimGeneral.MixingModule.mix_E8TeV_AVE_10_BX_25ns_300ns_spread_cfi':
-           pss = 'PU10bx25'
-        if ps == 'SimGeneral.MixingModule.mix_E8TeV_AVE_10_BX_50ns_300ns_spread_cfi':
-           pss = 'PU10bx50'
-        if ps == 'SimGeneral.MixingModule.mix_2011_FinalDist_OOTPU_cfi':
-           pss = 'PU_S13'	
-        if ps == 'SimGeneral.MixingModule.mix_fromDB_cfi':
-           pss = 'PU_RD1'
-        if ps == 'SimGeneral.MixingModule.mix_2012C_Profile_PoissonOOTPU_cfi':
-           pss = 'PU2012CExt'
-        if ps == 'SimGeneral.MixingModule.mixNoPU_cfi':
-           pss = 'NoPileUp'
-        if ps == 'SimGeneral.MixingModule.mix_POISSON_average_cfi':
-           pss = 'PU'
-        if ps == 'SimGeneral.MixingModule.mix_CSA14_50ns_PoissonOOTPU_cfi':
-           pss = 'PU_S14'
-
-        return pss
-        
-def getProcDSMiddlePiece(dataset):
-        dsPieces=dataset.split('/')
-        procdsPieces=dsPieces[2].split('-')
-        sep="-"
-        return sep.join(procdsPieces[1:len(procdsPieces)-1])
 
 def getPileupDataset(url, workflow):
         conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
@@ -160,67 +124,21 @@ def getCampaign(url, workflow):
         campaign=request['Campaign']
         return campaign
 
-def getGlobalTag(url, workflow):
+def getEra(url, workflow):
         conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
         r1=conn.request("GET",'/reqmgr/reqMgr/request?requestName='+workflow)
         r2=conn.getresponse()
         request = json.loads(r2.read())
-        globalTag=request['GlobalTag']
-        return globalTag
+        era=request['AcquisitionEra']
+        return era
 
-def getPileupScenario(url, workflow):
-        cacheID = getCacheID(url, workflow)
-        config = getConfig(url, cacheID)
-        [pileup,meanPileUp,bunchSpacing,cmdLineOptions] = getPileup(config)
-        scenario = getScenario(pileup)
-        if scenario == 'PU140Bx25' and meanPileUp != 'Unknown':
-           scenario = 'PU' + meanPileUp + 'bx25'
-        if scenario == 'PU140bx25' and 'Upgrade' in workflow:
-           scenario = 'PU140Bx25'
-        if scenario == 'PU140bx25' and 'Upg14' in workflow:
-           scenario = 'age1k_PU140bx25'
-        if scenario == 'PU':
-           scenario = 'PU' + meanPileUp + 'bx' + bunchSpacing
-           if meanPileUp == 'None' or bunchSpacing == 'None':
-              print 'ERROR: unexpected pileup settings in config'
-              sys.exit(0)
-        if scenario == 'PU_RD1' and cmdLineOptions != 'None':
-           if '--runsAndWeightsForMC [(190482,0.924) , (194270,4.811), (200466,7.21), (207214,7.631)]' in cmdLineOptions:
-              scenario = 'PU_RD2'
-        return scenario
-
-def getPileup(config):
-        pu = 'Unknown'
-        vmeanpu = 'None'
-        bx = 'None'
-        cmdLineOptions = 'None'
-        lines = config.split('\n')
-        for line in lines:
-           if 'process.load' and 'MixingModule' in line:
-              pu = line[line.find("'")+1:line.find("'",line.find("'")+1)]
-           if 'process.mix.input.nbPileupEvents.averageNumber' in line:
-              meanpu = line[line.find("(")+1:line.find(")")].split('.', 1)
-              vmeanpu = meanpu[0]
-           if 'process.mix.bunchspace' in line:
-              bx = line[line.find("(")+1:line.find(")")]
-           if 'with command line options' in line:
-              cmdLineOptions = line
-        return [pu,vmeanpu,bx,cmdLineOptions]
-
-def getCacheID(url, workflow):
+def getProcString(url, workflow):
         conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
         r1=conn.request("GET",'/reqmgr/reqMgr/request?requestName='+workflow)
         r2=conn.getresponse()
         request = json.loads(r2.read())
-        cacheID=request['StepOneConfigCacheID']
-        return cacheID
-
-def getConfig(url, cacheID):
-        conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
-        r1=conn.request("GET",'/couchdb/reqmgr_config_cache/'+cacheID+'/configFile')
-        r2=conn.getresponse()
-        config = r2.read()
-        return config
+        procString=request['ProcessingString']
+        return procString
 
 def assignRequest(url ,workflow ,team ,site ,era, procversion, procstring, activity, lfn, maxmergeevents, maxRSS, maxVSize, useX, siteCust):
 
@@ -229,9 +147,6 @@ def assignRequest(url ,workflow ,team ,site ,era, procversion, procstring, activ
     else:
        softTimeout = 144000
        
-
-       
-
     params = {"action": "Assign",
               "Team"+team: "checked",
               "SiteWhitelist": site,
@@ -247,10 +162,10 @@ def assignRequest(url ,workflow ,team ,site ,era, procversion, procstring, activ
               "MaxMergeEvents": maxmergeevents,
 	      "maxRSS": maxRSS,
               "maxVSize": maxVSize,
-              "AcquisitionEra": era,
+              #"AcquisitionEra": era,
 	      "dashboard": activity,
               "ProcessingVersion": procversion,
-              "ProcessingString": procstring,
+              #"ProcessingString": procstring,
               "checkbox"+workflow: "checked"}
               
               
@@ -316,13 +231,14 @@ def main():
 		print "A filename or workflow is required"
 		sys.exit(0)
 	activity='reprocessing'
+        #activity='test'
         if not options.restrict:
                 restrict='None'
         else:
                 restrict=options.restrict
-        maxRSS = 2300000
+        maxRSS = 2800000
         if not options.maxRSS:
-                maxRSS = 2300000
+                maxRSS = 3000000
         else:
                 maxRSS=options.maxRSS
 	maxRSSdefault = maxRSS
@@ -406,25 +322,17 @@ def main():
                  siteCust = options.siteCust
            if options.site == 'HLT':
               siteUse = ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN']
-              team = 'hlt'
 
            # Check if input dataset subscribed to disk endpoint
-           if 'T2_CH_CERN' in siteUse:
-              siteSE = 'T2_CH_CERN'
-           else:
+           if 'T2_CH_CERN' not in siteUse:
               siteSE = siteUse + '_Disk'
            [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, inputDataset, siteSE)
            if not subscribedOurSite and not options.xrootd and 'Fall11R2' not in workflow and not ignore:
               print 'ERROR: input dataset not subscribed/approved to required Disk endpoint'
-              sys.exit(0)
+#              sys.exit(0)
            if options.xrootd and not subscribedOtherSite and not ignore:
               print 'ERROR: input dataset not subscribed/approved to any Disk endpoint'
-              sys.exit(0)
-
-           # Extract required part of global tag
-           gtRaw = getGlobalTag(url, workflow)
-           gtBits = gtRaw.split('::')
-           globalTag = gtBits[0]
+#              sys.exit(0)
 
            # Get campaign name
            campaign = getCampaign(url, workflow)
@@ -433,275 +341,22 @@ def main():
            if pileupDataset != 'None':
               [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, pileupDataset, siteSE)
               if not subscribedOurSite:
-                 print 'ERROR: pileup dataset not subscribed/approved to required Disk endpoint'
-                 sys.exit(0)            
+                 print 'ERROR: pileup dataset (',pileupDataset,') not subscribed/approved to required Disk endpoint'
+                 #sys.exit(0)            
          
-           # Determine pileup scenario
-           # - Fall11_R2 & Fall11_R4 don't add pileup so extract pileup scenario from input
-           pileupScenario = ''
-           if not options.inprocstring:
-              pileupScenario = getPileupScenario(url, workflow)
-              if campaign == 'Summer12_DR53X_RD':
-                 pileupScenario = 'PU_RD1'
-              if pileupScenario == 'Unknown' and 'MinBias' in pileupDataset and 'LowPU2010DR42' not in workflow:
-                 print 'ERROR: unable to determine pileup scenario'
-                 sys.exit(0)
-              elif 'Fall11_R2' in workflow or 'Fall11_R4' in workflow or 'Fall11R2' in workflow or 'Fall11R4' in workflow:
-                 matchObj = re.match(r".*Fall11-(.*)_START.*", inputDataset)
-                 if matchObj:
-                    pileupScenario = matchObj.group(1)
-                 else:
-                    pileupScenario == 'Unknown'
-              elif pileupScenario == 'Unknown' and 'MinBias' not in pileupDataset:
-                 pileupScenario = 'NoPileUp'
-
-              if pileupScenario == 'Unknown':
-                 pileupScenario = ''
-
            # Decide which team to use if not already defined
            if not team:
               priority = int(getPriority(url, workflow))
               if priority < 100000:
                  team = 'reproc_lowprio'
               else:
-                 team = 'reproc_highprio'
+                 team = 'reproc_lowprio'
 
-           specialName = ''
-
-           era = 'Summer12'
            lfn = '/store/mc'
-
-           #delete era and lfn so it can't reuse the ones from the previous workflow
-	   del era
-	   del lfn
-
-           # Set era, lfn and campaign-dependent part of name if necessary
-           if 'Summer12_DR51X' in workflow:
-              era = 'Summer12'
-              lfn = '/store/mc'
-
-           if 'Summer12_DR52X' in workflow:
-              era = 'Summer12'
-              lfn = '/store/mc'
-
-           if 'Summer12_DR53X' in workflow or ('Summer12' in workflow and 'DR53X' in workflow):
-              era = 'Summer12_DR53X'
-              lfn = '/store/mc'
-
-           #this is incorrect for HiFall11 workflows, but is changed further down
-           if 'Fall11_R' in workflow or 'Fall11R' in workflow:
-              era = 'Fall11'
-              lfn = '/store/mc'
-
-           if 'Summer13dr53X' in workflow:
-              era = 'Summer13dr53X'
-              lfn = '/store/mc'
-
-           if 'Summer11dr53X' in workflow:
-              era = 'Summer11dr53X'
-              lfn = '/store/mc'
-
-           if 'Fall11_HLTMuonia' in workflow:
-              era = 'Fall11'
-              lfn = '/store/mc'
-              specialName = 'HLTMuonia_'
-
-           if 'Summer11_R' in workflow:
-              era = 'Summer11'
-              lfn = '/store/mc'
-
-           if 'LowPU2010_DR42' in workflow or 'LowPU2010DR42' in workflow:
-              era = 'Summer12'
-              lfn = '/store/mc'
-              specialName = 'LowPU2010_DR42_'
-              pileupScenario = 'PU_S0'
-
-           if 'UpgradeL1TDR_DR6X' in workflow:
-              era = 'Summer12'
-              lfn = '/store/mc'
-
-           if 'HiWinter13' in inputDataset:
-              era = 'HiWinter13'
-              lfn = '/store/himc'
-     
-           if 'Spring14dr' in workflow:
-              era = 'Spring14dr'
-              lfn = '/store/mc'
-              if '_castor_' in workflow:
-                 specialName = 'castor_'
-
-           if 'ppSpring2014DRX53' in workflow:
-              era = 'ppSpring2014DRX53'
-              lfn = '/store/mc'
-              if '_castor_' in workflow:
-                 specialName = 'castor_'
-                 
-           if 'Spring14miniaod' in workflow:
-              era = 'Spring14miniaod'
-              specialName=getProcDSMiddlePiece(inputDataset)
-              lfn = '/store/mc'
-              pileupScenario = ''
-              globalTag = '' 
-              siteCust= 'None'                
-
-           if 'Winter13' in workflow and 'DR53X' in workflow:
-              era = 'HiWinter13'
-              lfn = '/store/himc'
-           if 'HiWinter13' in workflow and 'DR53X' in workflow:
-              pileupScenario = ''  
-           if 'pAWinter13' in workflow and 'DR53X' in workflow:
-              pileupScenario = 'pa' # not actually the pileup scenario of course
-           if 'pAWinter13' in workflow and 'DR53X' in workflow and 'pAMixingHijing' in workflow:
-              pileupScenario = 'pa_pAMixingHijing' # not actually the pileup scenario of course
-           if 'ppWinter13' in workflow and 'DR53X' in workflow:
-              pileupScenario = 'pp' # not actually the pileup scenario of course
-
-           if 'Summer11LegDR' in campaign:
-              era = 'Summer11LegDR'
-              lfn = '/store/mc'
-
-           if 'UpgradePhase1Age' in campaign:
-              era = 'Summer13'
-	      lfn = '/store/mc'
-              specialName = campaign + '_'
-
-           if campaign == 'UpgradePhase2LB4PS_2013_DR61SLHCx':
-              era = 'Summer13'
-              lfn = '/store/mc'
-              specialName = campaign + '_'
-
-           if campaign == 'UpgradePhase2BE_2013_DR61SLHCx':
-              era = 'Summer13'
-              lfn = '/store/mc'
-              specialName = campaign + '_'
-
-           if campaign == 'UpgradePhase2LB6PS_2013_DR61SLHCx':
-              era = 'Summer13'
-              lfn = '/store/mc'
-              specialName = campaign + '_'
-  
-           if campaign == 'UpgradePhase1Age0DES_DR61SLHCx':
-              era = 'Summer13'
-              lfn = '/store/mc'
-              specialName = campaign + '_'
-           
-           if campaign == 'UpgradePhase1Age0START_DR61SLHCx':
-              era = 'Summer13'
-              lfn = '/store/mc'
-              specialName = campaign + '_'
-
-           if campaign == 'UpgradePhase1Age3H_DR61SLHCx':
-              era = 'Summer13'
-              lfn = '/store/mc'
-              specialName = campaign + '_'
-
-           if campaign == 'UpgradePhase1Age5H_DR61SLHCx':
-              era = 'Summer13'
-              lfn = '/store/mc'
-              specialName = campaign + '_'
-
-           if campaign == 'UpgradePhase1Age1K_DR61SLHCx':
-              era = 'Summer13'
-              lfn = '/store/mc'
-              specialName = campaign + '_'
-
-           if campaign == 'UpgradePhase1Age3K_DR61SLHCx':
-              era = 'Summer13'
-              lfn = '/store/mc'
-              specialName = campaign + '_'
-
-           #change back to old campaign names for UpgradePhase1
-           if 'UpgradePhase1Age' in campaign and 'dr61SLHCx' in specialName:
-              specialName = specialName.replace("dr61SLHCx","_DR61SLHCx")
-           if 'dr61SLHCx' in specialName:
-              print 'WARNING: using new campaign name format'		   
-
-           if campaign == 'HiFall11_DR44X' or campaign == 'HiFall11DR44':
-              era = 'HiFall11'
-              lfn = '/store/himc'
-              specialName = 'HiFall11_DR44X' + '_'
-
-           if campaign == 'HiFall13DR53X':
-              era = 'HiFall13DR53X'
-              lfn = '/store/himc'
-
-           if campaign == 'UpgFall13d':
-              era = campaign
-              lfn = '/store/mc'
-              
-           if campaign == '2019GEMUpg14DR':
-              era = 'GEM2019Upg14DR'
-              lfn = '/store/mc'
-              if '_age1k_' in workflow:
-                 specialName = 'age1k_'
-
-           if campaign == '2023MuonUpg14DR':
-              era = 'Muon2023Upg14DR'
-              lfn = '/store/mc'
-              if '_age1k_' in workflow:
-                 specialName = 'age1k_'
-
-           if campaign == '2023TTIUpg14DR':
-              era = 'TTI2023Upg14DR'
-              lfn = '/store/mc'
-              if '_age1k_' in workflow:
-                 specialName = 'age1k_'
-
-           if campaign == '2023TTIUpg14D':
-              era = 'TTI2023Upg14D'
-              lfn = '/store/mc'
-              if '_age1k_' in workflow:
-                 specialName = 'age1k_'
-
-           if campaign == 'Summer12ExtendedGeo14DR':
-              era = campaign
-              lfn = '/store/mc'
-
-           if campaign == 'Fall13dr':
-              era = campaign
-              lfn = '/store/mc'
-              if '_castor_tsg_' in workflow:
-                 specialName = 'castor_tsg_'
-              elif '_castor_' in workflow:
-                 specialName = 'castor_'
-              elif '_tsg_' in workflow:
-                 specialName = 'tsg_'
-              elif '__' in workflow:
-                 specialName = ''
-              else:
-                 print 'ERROR: unexpected special name string in workflow name'
-                 sys.exit(0)
-
-           # Handle NewG4Phys
-           if campaign == 'Summer12DR53X' and 'NewG4Phys' in workflow:
-              specialName = 'NewG4Phys_'
-
-           # Handle Ext30
-           if campaign == 'Summer12DR53X' and 'Ext30' in workflow:
-              specialName = 'Ext30_'
-
-           # Handle BS2011
-           if campaign == 'LowPU2010DR42' and 'BS2011' in workflow:
-              specialName = 'LowPU2010_DR42_BS2011_'
-
-           # Construct processed dataset version
-           if pileupScenario != '':
-              pileupScenario = pileupScenario+'_' 
-           if options.specialprocstring:
-              specialName = options.specialprocstring + '_'
-           extTag = ''
-           if options.extension:
-              extTag = '_ext'+options.extension
-
-           # ProcessingString
-           if not options.inprocstring:
-              procstring = specialName+pileupScenario+globalTag+extTag
-           else:
-              procstring = options.inprocstring
 
            # ProcessingVersion
            if not options.inprocversion:
-              procversion = getDatasetVersion(url, workflow, era, procstring)
+              procversion = getDatasetVersion(url, workflow)
            else:
               procversion = options.inprocversion
 
@@ -717,22 +372,16 @@ def main():
            if 'DR61SLHCx' in workflow:
               maxmergeevents = 5000
 
-           # Checks
-           if not era:
-              print 'ERROR: era is not defined'
-              sys.exit(0)
-
            if not lfn:
               print 'ERROR: lfn is not defined'
               sys.exit(0)
 
+           era = getEra(url, workflow)
+           procstring = getProcString(url, workflow)
+
            if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN'] and not ignoresiterestrictions:
               print 'ERROR: invalid site'
-              sys.exit(0)
-
-           if pileupScenario == 'Unknown':
-              print 'ERROR: unable to determine pileup scenario'
-              sys.exit(0)
+              #sys.exit(0)
 
            if options.execute:
               if restrict == 'None' or restrict == siteUse:
