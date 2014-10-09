@@ -162,10 +162,10 @@ def assignRequest(url ,workflow ,team ,site ,era, procversion, procstring, activ
               "MaxMergeEvents": maxmergeevents,
 	      "maxRSS": maxRSS,
               "maxVSize": maxVSize,
-              #"AcquisitionEra": era,
+              "AcquisitionEra": era,
 	      "dashboard": activity,
               "ProcessingVersion": procversion,
-              #"ProcessingString": procstring,
+              "ProcessingString": procstring,
               "checkbox"+workflow: "checked"}
               
               
