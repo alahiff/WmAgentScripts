@@ -7,6 +7,18 @@ from changePriorityWorkflow import changePriorityWorkflow
 
 dbs3_url = r'https://cmsweb.cern.ch/dbs/prod/global/DBSReader'
 
+def getLFNbase(url, dataset):
+        # initialize API to DBS3
+        dbsapi = DbsApi(url=dbs3_url)
+        # retrieve file
+        reply = dbsapi.listFiles(dataset=dataset)
+        file = reply[0]['logical_file_name']
+        # determine lfn
+        lfn = '/store/mc'
+        if '/store/himc' in file:
+           lfn = '/store/himc'
+        return lfn
+
 def checkAcceptedSubscriptionRequest(url, dataset, site):
         conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
         r1=conn.request("GET",'/phedex/datasvc/json/prod/requestlist?dataset='+dataset+'&type=xfer')
@@ -70,7 +82,6 @@ def getPileupDataset(url, workflow):
 
         for line in list:
            if 'request.schema.MCPileup' in line:
-              #pileupDataset = line[line.find("=")+1:line.find("<br/")]
               pileupDataset = line[line.find("'")+1:line.find("'",line.find("'")+1)]
 
         return pileupDataset
@@ -107,22 +118,6 @@ def findCustodialLocation(url, dataset):
                 if replica['custodial']=="y" and replica['node']!="T0_CH_CERN_MSS":
                         return replica['node']
         return "None"
-
-def getPrepID(url, workflow):
-        conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
-        r1=conn.request("GET",'/reqmgr/reqMgr/request?requestName='+workflow)
-        r2=conn.getresponse()
-        request = json.loads(r2.read())
-        prepID=request['PrepID']
-        return prepID
-
-def getCampaign(url, workflow):
-        conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
-        r1=conn.request("GET",'/reqmgr/reqMgr/request?requestName='+workflow)
-        r2=conn.getresponse()
-        request = json.loads(r2.read())
-        campaign=request['Campaign']
-        return campaign
 
 def getEra(url, workflow):
         conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
@@ -176,7 +171,6 @@ def assignRequest(url ,workflow ,team ,site ,era, procversion, procstring, activ
        del params["CustodialSites"]
        siteCust='None'        
               
-
     if useX == 1:
        print "- Using xrootd for input dataset"
        params['useSiteListAsLocation'] = "true"
@@ -201,10 +195,8 @@ def assignRequest(url ,workflow ,team ,site ,era, procversion, procstring, activ
         print "Exiting!"
   	sys.exit(1)
     conn.close()
-    print 'Assigned workflow:',workflow,'to site:',site,'custodial site:',siteCust,'acquisition era:',era,'team',team,'processin string:',procstring,'processing version:',procversion,'lfn:',lfn,'maxmergeevents:',maxmergeevents,'maxRSS:',maxRSS,'maxVSize:',maxVSize
+    print 'Assigned workflow:',workflow,'to site:',site,'custodial site:',siteCust,'acquisition era:',era,'team',team,'processing string:',procstring,'processing version:',procversion,'lfn:',lfn
     return
-
-
 
 def main():
 	url='cmsweb.cern.ch'	
@@ -327,32 +319,29 @@ def main():
            if 'T2_CH_CERN' not in siteUse:
               siteSE = siteUse + '_Disk'
            [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, inputDataset, siteSE)
-           if not subscribedOurSite and not options.xrootd and 'Fall11R2' not in workflow and not ignore:
-              print 'ERROR: input dataset not subscribed/approved to required Disk endpoint'
-#              sys.exit(0)
+
+           if not subscribedOurSite and not options.xrootd and not ignore:
+              print 'ERROR: input dataset not subscribed/approved to required Disk endpoint and xrootd option not enabled'
+              sys.exit(0)
            if options.xrootd and not subscribedOtherSite and not ignore:
               print 'ERROR: input dataset not subscribed/approved to any Disk endpoint'
-#              sys.exit(0)
+              sys.exit(0)
 
-           # Get campaign name
-           campaign = getCampaign(url, workflow)
-
+           # Check if pileup dataset subscribed to disk endpoint
            pileupDataset = getPileupDataset(url, workflow)
            if pileupDataset != 'None':
               [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, pileupDataset, siteSE)
               if not subscribedOurSite:
                  print 'ERROR: pileup dataset (',pileupDataset,') not subscribed/approved to required Disk endpoint'
-                 #sys.exit(0)            
+                 sys.exit(0)            
          
            # Decide which team to use if not already defined
+           # - currently we only use reproc_lowprio for all workflows
            if not team:
-              priority = int(getPriority(url, workflow))
-              if priority < 100000:
-                 team = 'reproc_lowprio'
-              else:
-                 team = 'reproc_lowprio'
+              team = 'reproc_lowprio'
 
-           lfn = '/store/mc'
+           # Get LFN base from input dataset
+           lfn = getLFNbase(url, inputDataset)
 
            # ProcessingVersion
            if not options.inprocversion:
@@ -360,15 +349,15 @@ def main():
            else:
               procversion = options.inprocversion
 
-	   #reset maxRSS to default, so it can't reuse the custom value from a previous workflow
+	   # Seset maxRSS to default, so it can't reuse the custom value from a previous workflow
 	   maxRSS = maxRSSdefault
            if ('HiFall11' in workflow or 'HiFall13DR53X' in workflow) and 'IN2P3' in siteUse:
               maxRSS = 4000000
 
            # Set max number of merge events
            maxmergeevents = 50000
-           #if 'Fall11_R1' in workflow:
-           #   maxmergeevents = 6000
+           if 'Fall11R1' in workflow:
+              maxmergeevents = 6000
            if 'DR61SLHCx' in workflow:
               maxmergeevents = 5000
 
@@ -376,6 +365,7 @@ def main():
               print 'ERROR: lfn is not defined'
               sys.exit(0)
 
+           # Get era & processing string
            era = getEra(url, workflow)
            procstring = getProcString(url, workflow)
 
@@ -393,7 +383,7 @@ def main():
                      print 'Skipping workflow ',workflow
            else:
               if restrict == 'None' or restrict == siteUse:
-                 print 'Would assign ',workflow,' with ','Acquisition Era:',era,'ProcessingString:',procstring,'ProcessingVersion:',procversion,'lfn:',lfn,'Site(s):',siteUse,'Custodial Site:',siteCust,'team:',team,'maxmergeevents:',maxmergeevents,'maxRSS:',maxRSS
+                 print 'Would assign ',workflow,' with ','Acquisition Era:',era,'ProcessingString:',procstring,'ProcessingVersion:',procversion,'lfn:',lfn,'Site(s):',siteUse,'Custodial Site:',siteCust,'team:',team
                  if (newpriority !=0 ):
                     print "Would reset priority to %i" % newpriority
               else:
