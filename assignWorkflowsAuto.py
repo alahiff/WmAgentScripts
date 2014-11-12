@@ -63,7 +63,7 @@ def getSizeAtSite(site, dataset):
 def getSiteWithMostInput(dataset, threshold):
         sites = phedexClient.getBlockReplicaSites(dataset)
         for site in sites:
-           if 'MSS' not in site and 'Export' not in site and 'Buffer' not in site and 'EC2' not in site:
+           if 'MSS' not in site and 'Export' not in site and 'Buffer' not in site and 'EC2' not in site and 'CERN' not in site:
               completion = getSizeAtSite(site, dataset)
               if completion == 100.0 or completion > threshold:
                  site = site.replace('_Disk', '')
