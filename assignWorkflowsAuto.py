@@ -63,7 +63,7 @@ def getSizeAtSite(site, dataset):
 def getSiteWithMostInput(dataset, threshold):
         sites = phedexClient.getBlockReplicaSites(dataset)
         for site in sites:
-           if 'MSS' not in site and 'Export' not in site and 'Buffer' not in site and 'EC2' not in site and 'CERN' not in site:
+           if 'MSS' not in site and 'Export' not in site and 'Buffer' not in site and 'EC2' not in site and 'CERN' not in site and 'T1' in site:
               completion = getSizeAtSite(site, dataset)
               if completion == 100.0 or completion > threshold:
                  site = site.replace('_Disk', '')
@@ -388,7 +388,7 @@ def main():
 
            if not siteUse or siteUse == 'None':
               # Find site to run workflow if no site specified
-              threshold = 99.9
+              threshold = 99.0
               if options.threshold:
                  threshold = options.threshold
               [siteUse,completeness] = getSiteWithMostInput(inputDataset, threshold)
@@ -429,11 +429,11 @@ def main():
                  continue
          
            # Decide which team to use if not already defined
-           # - currently we only use reproc_lowprio for all workflows
+           # - currently we only use production for all workflows
            if options.team:
               team = options.team
            else:
-              team = 'reproc_lowprio'
+              team = 'production'
 
            # Get LFN base from input dataset
            lfn = getLFNbase(url, inputDataset)
@@ -507,7 +507,10 @@ def main():
 
         # List assigned workflows
         if len(workflowsAssigned) > 0:
-           print 'Workflows assigned:'
+           if options.execute:
+              print 'Workflows assigned:'
+           else:
+              print 'Workflows which can be assigned:'
            for workflow in workflowsAssigned:
               print ' ',workflow,workflowsAssigned[workflow]
      
