@@ -65,7 +65,7 @@ def getSiteWithMostInput(dataset, threshold):
         for site in sites:
            if 'MSS' not in site and 'Export' not in site and 'Buffer' not in site and 'EC2' not in site and 'CERN' not in site and 'T1' in site:
               completion = getSizeAtSite(site, dataset)
-              if completion == 100.0 or completion > threshold:
+              if (completion == 100.0 or completion > threshold):
                  site = site.replace('_Disk', '')
                  return [site, completion]
         return ['None', 0]
@@ -345,7 +345,8 @@ def main():
         sites = ['T1_DE_KIT', 'T1_FR_CCIN2P3', 'T1_IT_CNAF', 'T1_ES_PIC', 'T1_TW_ASGC', 'T1_UK_RAL', 'T1_US_FNAL', 'T2_CH_CERN', 'HLT']
 
         # only assign workflows from these campaigns
-        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR']
+        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73']
+        #valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR', 'Fall14DR']
 
         # Tier-1s with no tape left, so use CERN instead
         sitesNoTape = ['T1_US_FNAL', 'T1_FR_CCIN2P3']
@@ -388,7 +389,7 @@ def main():
 
            if not siteUse or siteUse == 'None':
               # Find site to run workflow if no site specified
-              threshold = 99.0
+              threshold = 98.0
               if options.threshold:
                  threshold = options.threshold
               [siteUse,completeness] = getSiteWithMostInput(inputDataset, threshold)
@@ -403,10 +404,11 @@ def main():
               else:
                  siteCust = options.siteCust
            if options.site == 'HLT':
-              siteUse = ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN']
+              #siteUse = ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN']
+              siteUse = ['T2_CH_CERN_HLT', 'T2_CH_CERN']
 
            if siteUse in sitesNoTape:
-              siteCust = '-c T0_CH_CERN'
+              siteCust = 'T0_CH_CERN'
 
            # Check if input dataset subscribed to disk endpoint
            siteSE = siteUse
@@ -424,8 +426,8 @@ def main():
            pileupDataset = getPileupDataset(url, workflow)
            if pileupDataset != 'None':
               [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, pileupDataset, siteSE)
-              if not subscribedOurSite:
-                 print 'ERROR: pileup dataset (',pileupDataset,') not subscribed/approved to required Disk endpoint'
+              if not subscribedOurSite and not ignore:
+                 print 'ERROR: pileup dataset (',pileupDataset,') not subscribed/approved to required Disk endpoint for workflow',workflow
                  continue
          
            # Decide which team to use if not already defined
@@ -457,7 +459,7 @@ def main():
               maxmergeevents = 5000
 
            # Acquisition era
-           era = getEra(url, workflow)
+           era = getCampaign(url, workflow)
 
            # Processing string
            if options.inprocstring: 
@@ -479,7 +481,7 @@ def main():
                  else:
                     print 'Would change splitting to',eventsPerJob,'events per job'
 
-           if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN'] and not ignoresiterestrictions:
+           if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN'] and not ignoresiterestrictions and siteUse != ['T2_CH_CERN_HLT', 'T2_CH_CERN']:
               print 'ERROR: invalid site',siteUse
               continue
 
