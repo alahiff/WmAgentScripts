@@ -361,8 +361,6 @@ def main():
         workflowsNotAssignedInput = []
         workflowsAssigned = {}
 
-        print time.strftime("%c")
-
         for workflow in f:
            workflow = workflow.rstrip('\n')
 
@@ -404,7 +402,6 @@ def main():
               else:
                  siteCust = options.siteCust
            if options.site == 'HLT':
-              #siteUse = ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN']
               siteUse = ['T2_CH_CERN_HLT', 'T2_CH_CERN']
 
            if siteUse in sitesNoTape:
@@ -481,7 +478,7 @@ def main():
                  else:
                     print 'Would change splitting to',eventsPerJob,'events per job'
 
-           if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_AI', 'T2_CH_CERN_HLT', 'T2_CH_CERN'] and not ignoresiterestrictions and siteUse != ['T2_CH_CERN_HLT', 'T2_CH_CERN']:
+           if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_T0', 'T2_CH_CERN_HLT', 'T2_CH_CERN'] and not ignoresiterestrictions and siteUse != ['T2_CH_CERN_HLT', 'T2_CH_CERN']:
               print 'ERROR: invalid site',siteUse
               continue
 
