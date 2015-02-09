@@ -16,7 +16,7 @@ def getCampaign(url, workflow):
         if 'Campaign' in request:
            campaign=request['Campaign']
            return campaign
-        return ''
+        return 'None'
 
 def getWorkflows(url):
    conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
@@ -63,7 +63,7 @@ def getSizeAtSite(site, dataset):
 def getSiteWithMostInput(dataset, threshold):
         sites = phedexClient.getBlockReplicaSites(dataset)
         for site in sites:
-           if 'MSS' not in site and 'Export' not in site and 'Buffer' not in site and 'EC2' not in site and 'CERN' not in site and 'T1' in site:
+           if 'MSS' not in site and 'Export' not in site and 'Buffer' not in site and 'EC2' not in site and 'CERN' not in site and (('T1' in site and 'AODSIM' not in dataset) or 'AODSIM' in dataset):
               completion = getSizeAtSite(site, dataset)
               if (completion == 100.0 or completion > threshold):
                  site = site.replace('_Disk', '')
@@ -107,11 +107,11 @@ def checkAcceptedSubscriptionRequest(url, dataset, site):
         ourNode=False
         otherNode=False
         for request in result['phedex']['request']:
-                for node in request['node']:
-                        if node['name']==site and node['decision']=='approved':
-                                ourNode=True
-                        elif 'Disk' in node['name'] and node['decision']=='approved':
-                                otherNode=True
+           for node in request['node']:
+              if node['name']==site and node['decision']=='approved':
+                 ourNode=True
+              elif 'Disk' in node['name'] and node['decision']=='approved':
+                 otherNode=True
         return[ourNode, otherNode]
 
 def getDatasetStatus(dataset):
@@ -128,14 +128,12 @@ def getDatasets(dataset):
         reply = dbsapi.listDatasets(dataset=dataset,dataset_access_type='*')
         return reply
 
-def getDatasetVersion(url, workflow):
+def getDatasetVersion(url, workflow, era, procstring):
         versionNum = 1
-        era = getEra(url, workflow)
-        partialProcVersion = getProcString(url, workflow)
         outputs = reqMgrClient.outputdatasetsWorkflow(url, workflow)
         for output in outputs:
            bits = output.split('/')
-           outputCheck = '/'+bits[1]+'/'+era+'-'+partialProcVersion+'*/'+bits[len(bits)-1]
+           outputCheck = '/'+bits[1]+'/'+era+'-'+procstring+'*/'+bits[len(bits)-1]
 
            datasets = getDatasets(outputCheck)
            for dataset in datasets:
@@ -203,6 +201,14 @@ def getEra(url, workflow):
         era=request['AcquisitionEra']
         return era
 
+def getCurrentStatus(url, workflow):
+        conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
+        r1=conn.request("GET",'/reqmgr/reqMgr/request?requestName='+workflow)
+        r2=conn.getresponse()
+        request = json.loads(r2.read())
+        status=request['RequestStatus']
+        return status
+
 def getProcString(url, workflow):
         conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
         r1=conn.request("GET",'/reqmgr/reqMgr/request?requestName='+workflow)
@@ -239,10 +245,10 @@ def assignRequest(url ,workflow ,team ,site ,era, procversion, procstring, activ
               "SoftTimeout": softTimeout,
               "GracePeriod": 300,
               "MaxMergeEvents": maxmergeevents,
-	      "maxRSS": maxRSS,
-              "maxVSize": maxVSize,
+	      "MaxRSS": maxRSS,
+              "MaxVSize": maxVSize,
               "AcquisitionEra": era,
-	      "dashboard": activity,
+	      "Dashboard": activity,
               "ProcessingVersion": procversion,
               "ProcessingString": procstring,
               "checkbox"+workflow: "checked"}
@@ -294,7 +300,6 @@ def main():
 	parser.add_option('-c', '--custodial', help='Custodial site',dest='siteCust')
 	parser.add_option('-p', '--procstring', help='Process String',dest='inprocstring')
 	parser.add_option('-m', '--procversion', help='Process Version',dest='inprocversion')
-	parser.add_option('-n', '--specialstring', help='Special Process String',dest='specialprocstring')
 	parser.add_option('-e', '--execute', help='Actually assign workflows',action="store_true",dest='execute')
 	parser.add_option('-x', '--restrict', help='Only assign workflows for this site',dest='restrict')
 	parser.add_option('-z', '--threshold', help='Threshold for completeness of input dataset at site',dest='threshold')
@@ -345,8 +350,7 @@ def main():
         sites = ['T1_DE_KIT', 'T1_FR_CCIN2P3', 'T1_IT_CNAF', 'T1_ES_PIC', 'T1_TW_ASGC', 'T1_UK_RAL', 'T1_US_FNAL', 'T2_CH_CERN', 'HLT']
 
         # only assign workflows from these campaigns
-        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73']
-        #valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR', 'Fall14DR']
+        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73', 'TP2023SHCALDR', '2019GEMUpg14DR']
 
         # Tier-1s with no tape left, so use CERN instead
         sitesNoTape = ['T1_US_FNAL', 'T1_FR_CCIN2P3']
@@ -363,6 +367,12 @@ def main():
 
         for workflow in f:
            workflow = workflow.rstrip('\n')
+
+           # Double check that the workflow really is in assignment-approved
+           currentStatus = getCurrentStatus(url, workflow)
+           if currentStatus != 'assignment-approved':
+              print 'NOTE: Due to workflow status (',currentStatus,') skipping',workflow
+              continue
 
            # Only automatically assign workflows from specified campaigns
            campaign = getCampaign(url, workflow)
@@ -387,11 +397,11 @@ def main():
 
            if not siteUse or siteUse == 'None':
               # Find site to run workflow if no site specified
-              threshold = 98.0
+              threshold = 97.0
               if options.threshold:
                  threshold = options.threshold
               [siteUse,completeness] = getSiteWithMostInput(inputDataset, threshold)
-              if siteUse == 'None' or ('T1_' not in siteUse and 'T2_CH_CERN' not in siteUse):
+              if siteUse == 'None' or ('T1_' not in siteUse and 'T2_CH_CERN' not in siteUse and campaign != 'Spring14miniaod'):
                  workflowsNotAssignedInput.append(workflow)
                  continue
      
@@ -404,16 +414,22 @@ def main():
            if options.site == 'HLT':
               siteUse = ['T2_CH_CERN_HLT', 'T2_CH_CERN']
 
+           # Some sites have no free space on tape, so send the data to CERN
            if siteUse in sitesNoTape:
               siteCust = 'T0_CH_CERN'
 
+           # Don't specify a custodial site for miniaod
+           if campaign == 'Spring14miniaod':
+              siteCust = 'None'
+
            # Check if input dataset subscribed to disk endpoint
            siteSE = siteUse
-           if 'T2_CH_CERN' not in siteUse:
+           if 'T1' in siteUse:
               siteSE = siteSE + '_Disk'
            [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, inputDataset, siteSE)
            if not subscribedOurSite and not options.xrootd and not ignore:
-              print 'ERROR: input dataset not subscribed/approved to required Disk endpoint and xrootd option not enabled (',subscribedOurSite,subscribedOtherSite,')'
+              print 'ERROR: input dataset not subscribed/approved to required Disk endpoint and xrootd option not enabled (',subscribedOurSite,subscribedOtherSite,workflow,')'
+              workflowsNotAssignedInput.append(workflow)
               continue
            if options.xrootd and not subscribedOtherSite and not ignore:
               print 'ERROR: input dataset not subscribed/approved to any Disk endpoint (',subscribedOurSite,subscribedOtherSite,')'
@@ -437,12 +453,6 @@ def main():
            # Get LFN base from input dataset
            lfn = getLFNbase(url, inputDataset)
 
-           # ProcessingVersion
-           if not options.inprocversion:
-              procversion = getDatasetVersion(url, workflow)
-           else:
-              procversion = options.inprocversion
-
 	   # Set maxRSS
 	   maxRSS = maxRSSdefault
            if ('HiFall11' in workflow or 'HiFall13DR53X' in workflow) and 'IN2P3' in siteUse:
@@ -458,11 +468,25 @@ def main():
            # Acquisition era
            era = getCampaign(url, workflow)
 
+           # Correct situations where campaign name cannot be used as acquisition era
+           if era == '2019GEMUpg14DR':
+              era = 'GEM2019Upg14DR'
+
+           if era == 'None':
+              print 'ERROR: unable to get campaign for workflow', workflow
+              continue
+
            # Processing string
            if options.inprocstring: 
               procstring = options.inprocstring
            else:
               procstring = getProcString(url, workflow)
+
+           # ProcessingVersion
+           if not options.inprocversion:
+              procversion = getDatasetVersion(url, workflow, era, procstring)
+           else:
+              procversion = options.inprocversion
  
            # Handle run-dependent MC
            if 'PU_RD' in procstring:
@@ -478,9 +502,11 @@ def main():
                  else:
                     print 'Would change splitting to',eventsPerJob,'events per job'
 
+           # Site checking
            if siteUse not in sites and options.site != 'T2_US' and siteUse != ['T2_CH_CERN_T0', 'T2_CH_CERN_HLT', 'T2_CH_CERN'] and not ignoresiterestrictions and siteUse != ['T2_CH_CERN_HLT', 'T2_CH_CERN']:
-              print 'ERROR: invalid site',siteUse
-              continue
+              if 'AODSIM' not in inputDataset:
+                 print 'ERROR: invalid site',siteUse
+                 continue
 
            workflowsAssigned[workflow] = siteUse
 
