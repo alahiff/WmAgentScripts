@@ -25,7 +25,9 @@ def getDatasetStatus(dataset):
         dbsapi = DbsApi(url=dbs3_url)
         # retrieve dataset summary
         reply = dbsapi.listDatasets(dataset=dataset,dataset_access_type='*',detail=True)
-        return reply[0]['dataset_access_type']
+        if len(reply) > 0:
+           return reply[0]['dataset_access_type']
+        return 'UNKNOWN'
 
 def percentageCompletion(url, workflow, outputDataset, verbose=False):
     """
@@ -73,13 +75,14 @@ def getWorkflows(state):
    workflows = []
    for item in items:
       if state in item['key'] and 'ReDigi' in item['key']:
-         workflows.append(item['key'][0])
+         if 'TEST' not in item['key'][0]:
+            workflows.append(item['key'][0])
 
    return workflows
       
 def main():
    # only workflows from these campaigns
-   valids = ['Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'Phys14DR', 'Fall11R1', 'Fall11R2' ,'Fall14DR']
+   valids = ['Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'Phys14DR', 'Fall11R1', 'Fall11R2' ,'Fall14DR', 'Fall14DR73', 'Summer11LegDR','Spring14miniaod','TP2023SHCALDR', '2019GEMUpg14DR']
    #valids = ['Phys14DR']
    #valids = ['Spring14miniaod']
 
