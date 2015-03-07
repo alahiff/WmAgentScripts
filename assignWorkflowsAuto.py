@@ -20,7 +20,7 @@ def getCampaign(url, workflow):
 
 def getWorkflows(url):
    conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
-   r1=conn.request("GET",'/couchdb/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after')
+   r1=conn.request("GET",'/couchdb/reqmgr_workload_cache/_design/ReqMgr/_view/bystatusandtype?stale=update_after')
    r2=conn.getresponse()
    data = json.loads(r2.read())
    items = data['rows']
@@ -94,6 +94,8 @@ def getLFNbase(url, dataset):
         lfn = '/store/mc'
         if '/store/himc' in file:
            lfn = '/store/himc'
+        if '/store/data' in file:
+           lfn = '/store/data'
         return lfn
 
 def checkAcceptedSubscriptionRequest(url, dataset, site):
@@ -350,7 +352,7 @@ def main():
         sites = ['T1_DE_KIT', 'T1_FR_CCIN2P3', 'T1_IT_CNAF', 'T1_ES_PIC', 'T1_TW_ASGC', 'T1_UK_RAL', 'T1_US_FNAL', 'T2_CH_CERN', 'HLT']
 
         # only assign workflows from these campaigns
-        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73', 'TP2023SHCALDR', '2019GEMUpg14DR']
+        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73', 'TP2023SHCALDR', '2019GEMUpg14DR', 'HiWinter13DR53X']
 
         # Tier-1s with no tape left, so use CERN instead
         sitesNoTape = ['T1_US_FNAL', 'T1_FR_CCIN2P3']
@@ -428,7 +430,7 @@ def main():
               siteSE = siteSE + '_Disk'
            [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, inputDataset, siteSE)
            if not subscribedOurSite and not options.xrootd and not ignore:
-              print 'ERROR: input dataset not subscribed/approved to required Disk endpoint and xrootd option not enabled (',subscribedOurSite,subscribedOtherSite,workflow,')'
+              print 'ERROR: input dataset not subscribed/approved to required Disk endpoint and xrootd option not enabled (',subscribedOurSite,subscribedOtherSite,workflow,siteSE,')'
               workflowsNotAssignedInput.append(workflow)
               continue
            if options.xrootd and not subscribedOtherSite and not ignore:
