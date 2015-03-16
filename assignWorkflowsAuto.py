@@ -352,7 +352,7 @@ def main():
         sites = ['T1_DE_KIT', 'T1_FR_CCIN2P3', 'T1_IT_CNAF', 'T1_ES_PIC', 'T1_TW_ASGC', 'T1_UK_RAL', 'T1_US_FNAL', 'T2_CH_CERN', 'HLT']
 
         # only assign workflows from these campaigns
-        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73', 'TP2023SHCALDR', '2019GEMUpg14DR', 'HiWinter13DR53X']
+        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73', 'TP2023SHCALDR', '2019GEMUpg14DR', 'HiWinter13DR53X', 'RunIWinter15DR']
 
         # Tier-1s with no tape left, so use CERN instead
         sitesNoTape = ['T1_US_FNAL', 'T1_FR_CCIN2P3']
@@ -399,13 +399,16 @@ def main():
 
            if not siteUse or siteUse == 'None':
               # Find site to run workflow if no site specified
-              threshold = 97.0
+              threshold = 98.0
               if options.threshold:
                  threshold = options.threshold
               [siteUse,completeness] = getSiteWithMostInput(inputDataset, threshold)
               if siteUse == 'None' or ('T1_' not in siteUse and 'T2_CH_CERN' not in siteUse and campaign != 'Spring14miniaod'):
                  workflowsNotAssignedInput.append(workflow)
                  continue
+              if completeness < 100.0:
+                 print 'Input dataset is < 100% complete (',completeness,') so enabling xrootd'
+                 useX = 1
      
            # Set the custodial location if necessary
            if not options.site or options.site != 'T2_US':
@@ -442,7 +445,7 @@ def main():
            if pileupDataset != 'None':
               [subscribedOurSite, subscribedOtherSite] = checkAcceptedSubscriptionRequest(url, pileupDataset, siteSE)
               if not subscribedOurSite and not ignore:
-                 print 'ERROR: pileup dataset (',pileupDataset,') not subscribed/approved to required Disk endpoint for workflow',workflow
+                 print 'ERROR: pileup dataset (',pileupDataset,') not subscribed/approved to required Disk endpoint',siteSE,' for workflow',workflow
                  continue
          
            # Decide which team to use if not already defined
