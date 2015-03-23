@@ -180,7 +180,7 @@ def main():
         parser.add_option('-e', '--execute', help='Actually subscribe data',action="store_true",dest='execute')
 	(options,args) = parser.parse_args()
 
-        t1s = ['T1_IT_CNAF_Disk','T1_ES_PIC_Disk','T1_DE_KIT_Disk','T1_FR_CCIN2P3_Disk','T1_UK_RAL_Disk','T1_US_FNAL_Disk','RunIWinter15DR']
+        t1s = ['T1_IT_CNAF_Disk','T1_ES_PIC_Disk','T1_DE_KIT_Disk','T1_FR_CCIN2P3_Disk','T1_UK_RAL_Disk','T1_US_FNAL_Disk']
 
         data = {}
         sizes = {}
