@@ -1,14 +1,71 @@
 #!/usr/bin/env python
-import urllib2,urllib, httplib, sys, re, os, json
-import optparse
+import urllib2, urllib, httplib, sys, re, os, json, time, optparse
 from dbs.apis.dbsClient import DbsApi
 from das_client import get_data
 from xml.dom.minidom import getDOMImplementation
 from collections import defaultdict
+import phedexClient
+
 
 url='cmsweb.cern.ch'
 dbs3_url = r'https://cmsweb.cern.ch/dbs/prod/global/DBSReader'
 das_host='https://cmsweb.cern.ch'
+
+def listSubscriptions(url, dataset):
+        conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
+        r1=conn.request("GET",'/phedex/datasvc/json/prod/requestlist?dataset='+dataset+'&type=xfer')
+        r2=conn.getresponse()
+        result = json.loads(r2.read())
+        requests=result['phedex']
+
+        sites = []
+        created = {}
+        decisions = {}
+        decided = {}
+
+        if 'request' not in requests.keys():
+           return [sites, decisions, decided]
+        
+        for request in result['phedex']['request']:
+           tc = request['time_create']
+           for node in request['node']:
+              name = node['name']
+              if 'MSS' not in name and 'Buffer' not in name and 'Export' not in name:
+                 sites.append(name)
+                 de = node['decision']
+                 td = node['time_decided']
+                 decisions[name] = de
+                 decided[name] = td
+                 created[name] = tc
+        return [sites, created, decisions, decided]
+
+def getReplicaFileCount(site,datasetName):
+    url = 'https://cmsweb.cern.ch/phedex/datasvc/json/prod/blockreplicas?dataset=' + datasetName+'&node='+site
+    result = json.loads(urllib2.urlopen(url).read())
+    blocks=result['phedex']['block']
+    cnt=0
+    if blocks:
+       for block in blocks:
+          if 'files' in block:
+             cnt = cnt + int(block['files'])
+    return cnt
+
+def getFileCount(dataset):
+        # initialize API to DBS3
+        dbsapi = DbsApi(url=dbs3_url)
+        # retrieve dataset summary
+        reply = dbsapi.listBlockSummaries(dataset=dataset,detail=True)
+        cnt=0
+        for block in reply:
+           cnt = cnt + int(block['num_file'])
+        return cnt
+
+def getSizeAtSite(site, dataset):
+   actualFiles = getFileCount(dataset)
+   haveFiles = getReplicaFileCount(site, dataset)
+   if actualFiles > 0:
+      return 100.0*float(haveFiles)/float(actualFiles)
+   return 0
 
 def getInputDataSet(url, workflow):
    conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
@@ -27,7 +84,7 @@ def getInputDataSet(url, workflow):
 
 def getWorkflows(state):
    conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
-   r1=conn.request("GET",'/couchdb/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after')
+   r1=conn.request("GET",'/couchdb/reqmgr_workload_cache/_design/ReqMgr/_view/bystatusandtype?stale=update_after')
    r2=conn.getresponse()
    data = json.loads(r2.read())
    items = data['rows']
@@ -40,10 +97,6 @@ def getWorkflows(state):
    return workflows
 
 def getBlockSizeDataSet(dataset):
-    """
-    Returns the number of events in a dataset using DBS3
-
-    """
     # initialize API to DBS3
     dbsapi = DbsApi(url=dbs3_url)
     # retrieve dataset summary
@@ -127,31 +180,66 @@ def main():
         parser.add_option('-e', '--execute', help='Actually subscribe data',action="store_true",dest='execute')
 	(options,args) = parser.parse_args()
 
-        t1s = ['T1_IT_CNAF_Disk','T1_ES_PIC_Disk','T1_DE_KIT_Disk','T1_FR_CCIN2P3_Disk','T1_UK_RAL_Disk','T1_US_FNAL_Disk']
+        t1s = ['T1_IT_CNAF_Disk','T1_ES_PIC_Disk','T1_DE_KIT_Disk','T1_FR_CCIN2P3_Disk','T1_UK_RAL_Disk','T1_US_FNAL_Disk','RunIWinter15DR']
 
         data = {}
         sizes = {}
         workflows = getWorkflows('assignment-approved')
         for workflow in workflows:
            dataset = getInputDataSet(url, workflow)
-           [req,app] = checkAcceptedSubscriptionRequest(url, dataset)
-           if not req:
-              siteCustodial = findCustodialLocation(url, dataset)
-              size = getBlockSizeDataSet(dataset)
-              siteDisk = siteCustodial.replace("MSS","Disk")
-              if siteDisk == 'None':
-                 siteDisk = 'T1_US_FNAL_Disk'
-              if siteDisk not in data:
-                 data[siteDisk] = []
-              if siteDisk not in sizes:
-                 sizes[siteDisk] = 0
-              if dataset not in data[siteDisk]:
-                 data[siteDisk].append(dataset)
-                 sizes[siteDisk] = sizes[siteDisk] + size
+           if 'GEN-SIM' in dataset or 'GEN-RAW' in dataset:
+              subscribe = 1
+              print ''
+              print 'CONSIDERING',workflow,dataset
+
+              # Get list of sites which have at least part of this dataset
+              #sitesWithReplicas = phedexClient.getBlockReplicaSites(dataset)
+
+              # Check if input dataset is 100% complete at any site
+              #for site in sites:
+              #   if 'Buffer' not in site and 'MSS' not in site and 'Export' not in site and 'T1' in site:
+              #      size = getSizeAtSite(site, dataset)
+
+              # Get list of subscriptions
+              [sites, created, decisions, decided] = listSubscriptions(url, dataset)
+          
+              # Check if any subscriptions to disk exist
+              found = 0
+              for site in sites:
+                 print '- checking subscription to',site,created[site],decisions[site],decided[site]
+                 if 'Buffer' not in site and 'MSS' not in site and 'Export' not in site and 'T1' in site:
+                    if int(time.time()) - int(created[site]) < 5184000:
+                       print '-- found potential candidate'
+                       subscribe = 0
+              if subscribe == 1:
+                 siteCustodial = findCustodialLocation(url, dataset)
+                 print '- custodial site is:',siteCustodial
+                 size = getBlockSizeDataSet(dataset)
+                 siteDisk = siteCustodial.replace("MSS","Disk")
+
+                 # if no custodial site, pick a site to use
+                 if siteDisk == 'None':
+                    siteDisk = 'T1_US_FNAL_Disk'
+                    print '- no custodial site, picking:',siteDisk
+
+                 # don't use PIC for huge workflows
+                 if 'PIC' in siteDisk and size > 16.0:
+                    siteDisk = 'T1_US_FNAL_Disk'
+                    print '- too big for PIC, picking:',siteDisk
+
+                 if siteDisk not in data:
+                    data[siteDisk] = []
+                 if siteDisk not in sizes:
+                    sizes[siteDisk] = 0
+                 if dataset not in data[siteDisk]:
+                    data[siteDisk].append(dataset)
+                    sizes[siteDisk] = sizes[siteDisk] + size
         for site in data:
            print ''
            print 'Subscription to',site,'of size',sizes[site],'TB'
-           print data[site]
+           #print data[site]
+           for bit in data[site]:
+              print bit
            if options.execute:
               print makeReplicaRequest(url, site, data[site], 'prestaging')
 
