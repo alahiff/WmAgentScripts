@@ -330,11 +330,6 @@ def main():
                 maxVSize=options.maxVSize
 	filename=options.filename
 
-        if not options.xrootd:
-           useX = 0
-        else:
-           useX = 1
-           
         ignore = 0
         if options.ignore:
            ignore = 1
@@ -349,7 +344,7 @@ def main():
            newpriority=options.newpriority
 
         # Valid Tier-1 sites
-        sites = ['T1_DE_KIT', 'T1_FR_CCIN2P3', 'T1_IT_CNAF', 'T1_ES_PIC', 'T1_TW_ASGC', 'T1_UK_RAL', 'T1_US_FNAL', 'T2_CH_CERN', 'HLT']
+        sites = ['T1_DE_KIT', 'T1_FR_CCIN2P3', 'T1_IT_CNAF', 'T1_ES_PIC', 'T1_TW_ASGC', 'T1_UK_RAL', 'T1_US_FNAL', 'T1_RU_JINR', 'T2_CH_CERN', 'HLT']
 
         # only assign workflows from these campaigns
         valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73', 'TP2023SHCALDR', '2019GEMUpg14DR', 'HiWinter13DR53X', 'RunIWinter15DR']
@@ -369,6 +364,11 @@ def main():
 
         for workflow in f:
            workflow = workflow.rstrip('\n')
+
+           if not options.xrootd:
+              useX = 0
+           else:
+              useX = 1
 
            # Double check that the workflow really is in assignment-approved
            currentStatus = getCurrentStatus(url, workflow)
