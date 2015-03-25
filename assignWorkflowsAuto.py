@@ -347,7 +347,7 @@ def main():
         sites = ['T1_DE_KIT', 'T1_FR_CCIN2P3', 'T1_IT_CNAF', 'T1_ES_PIC', 'T1_TW_ASGC', 'T1_UK_RAL', 'T1_US_FNAL', 'T1_RU_JINR', 'T2_CH_CERN', 'HLT']
 
         # only assign workflows from these campaigns
-        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73', 'TP2023SHCALDR', '2019GEMUpg14DR', 'HiWinter13DR53X', 'RunIWinter15DR']
+        valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73', 'TP2023SHCALDR', '2019GEMUpg14DR', 'HiWinter13DR53X', 'RunIWinter15DR', '2023SHCALUpg14DR']
 
         # Tier-1s with no tape left, so use CERN instead
         sitesNoTape = ['T1_US_FNAL', 'T1_FR_CCIN2P3']
@@ -476,6 +476,8 @@ def main():
            # Correct situations where campaign name cannot be used as acquisition era
            if era == '2019GEMUpg14DR':
               era = 'GEM2019Upg14DR'
+           if era == '2023SHCALUpg14DR':
+              era = 'SHCAL2023Upg14DR'
 
            if era == 'None':
               print 'ERROR: unable to get campaign for workflow', workflow
