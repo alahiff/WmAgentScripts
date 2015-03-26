@@ -2,11 +2,13 @@
 import sys,re,time,os
 import json
 import optparse
+import subprocess
 import httplib
 import datetime
 import shutil
 import reqMgrClient
 import setDatasetStatusDBS3
+import AnnounceWF
 from dbs.apis.dbsClient import DbsApi
 
 dbs3_url = r'https://cmsweb.cern.ch/dbs/prod/global/DBSReader'
@@ -67,7 +69,7 @@ def getInputDataSet(url, workflow):
 
 def getWorkflows(state):
    conn  =  httplib.HTTPSConnection(url, cert_file = os.getenv('X509_USER_PROXY'), key_file = os.getenv('X509_USER_PROXY'))
-   r1=conn.request("GET",'/couchdb/wmstats/_design/WMStats/_view/requestByStatusAndType?stale=update_after')
+   r1=conn.request("GET",'/couchdb/reqmgr_workload_cache/_design/ReqMgr/_view/bystatusandtype?stale=update_after')
    r2=conn.getresponse()
    data = json.loads(r2.read())
    items = data['rows']
@@ -81,10 +83,12 @@ def getWorkflows(state):
    return workflows
       
 def main():
+   parser = optparse.OptionParser()
+   parser.add_option('-e', '--execute', help='Execute',action="store_true",dest='execute') 
+   (options,args) = parser.parse_args()
+
    # only workflows from these campaigns
-   valids = ['Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'Phys14DR', 'Fall11R1', 'Fall11R2' ,'Fall14DR', 'Fall14DR73', 'Summer11LegDR','Spring14miniaod','TP2023SHCALDR', '2019GEMUpg14DR']
-   #valids = ['Phys14DR']
-   #valids = ['Spring14miniaod']
+   valids = ['Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'Phys14DR', 'Fall11R1', 'Fall11R2' ,'Fall14DR', 'Fall14DR73', 'Summer11LegDR','Spring14miniaod','TP2023SHCALDR', '2019GEMUpg14DR','HiWinter13DR53X','RunIWinter15DR','HiFall13DR53X']
 
    # Get list of workflows
    workflows = getWorkflows('closed-out')
@@ -113,11 +117,14 @@ def main():
                if 'DQMIO' not in dataset and 'ALCA' not in dataset:
                   goodAll = goodAll + 1
          if statusAll == 0 and goodAll == 0 and typeAll == 0:
-            print 'Announce: ',workflow
+            print 'Announcing:',workflow
             for dataset in outputDataSets:
                print 'DATA:',dataset
-               #setDatasetStatusDBS3.setStatusDBS3('https://cmsweb.cern.ch/dbs/prod/global/DBSWriter', dataset, 'VALID', '')
-               #AnnounceWorkflow(url, workflow)
+               if options.execute:
+                  setDatasetStatusDBS3.setStatusDBS3('https://cmsweb.cern.ch/dbs/prod/global/DBSWriter', dataset, 'VALID', '')
+                  AnnounceWorkflow(url, workflow)
+                  if 'AOD' in dataset and options.execute:
+                     subprocess.call(['assignDatasetToSite.py','--dataset='+dataset,'--exec'])
          if statusAll > 0:
             print 'Not announcing',workflow,'due to VALID output datasets'
          if goodAll > 0:
