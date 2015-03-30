@@ -350,7 +350,7 @@ def main():
         valids = ['Fall11R1', 'Fall11R2', 'Fall11R4', 'Spring14dr', 'Fall13dr', 'Summer12DR53X', 'pAWinter13DR53X', 'Cosmic70DR', 'HiFall13DR53X', 'Phys14DR', 'Summer11LegDR','Fall14DR', 'Fall14DR73', 'TP2023SHCALDR', '2019GEMUpg14DR', 'HiWinter13DR53X', 'RunIWinter15DR', '2023SHCALUpg14DR']
 
         # Tier-1s with no tape left, so use CERN instead
-        sitesNoTape = ['T1_US_FNAL', 'T1_FR_CCIN2P3']
+        sitesNoTape = ['T1_RU_JINR']
 
         if options.filename:
            f = open(filename,'r')
